@@ -1,0 +1,15 @@
+body {
+  font-family: verdana;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+form > * {
+  margin: 0.5rem;
+}
+#productList img {
+  display: block;
+}
