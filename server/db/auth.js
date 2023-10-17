@@ -3,6 +3,7 @@ const { v4 } = require('uuid');
 const uuidv4 = v4;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 const findUserByToken = async(token) => {
   try {
@@ -29,23 +30,39 @@ const findUserByToken = async(token) => {
   }
 }
 
-const authenticate = async(credentials)=> {
-  const SQL = `
-    SELECT id, password
+const authenticate = async(code)=> {
+  let response = await axios.post('https://github.com/login/oauth/access_token', {
+    client_id: process.env.GITHUB_CLIENT_ID,
+    code,
+    client_secret: process.env.GITHUB_SECRET
+  }, {
+    headers: {
+      accept: 'application/json'
+    }
+  });
+
+  /*
+  Authorization: Bearer OAUTH-TOKEN
+GET https://api.github.com/user
+*/
+  response = await axios.get('https://api.github.com/user', {
+    headers: {
+      Authorization: `Bearer ${response.data.access_token}`
+    }
+  });
+
+  const login = response.data.login;
+  let SQL = `
+    SELECT id
     FROM users
     WHERE username = $1
   `;
-  const response = await client.query(SQL, [credentials.username]);
+  response = await client.query(SQL, [login]);
   if(!response.rows.length){
-    const error = Error('bad credentials');
-    error.status = 401;
-    throw error;
-  }
-  const valid = await bcrypt.compare(credentials.password, response.rows[0].password);
-  if(!valid){
-    const error = Error('bad credentials');
-    error.status = 401;
-    throw error;
+    SQL = `
+      INSERT INTO users(id, username) VALUES($1, $2) RETURNING *
+    `;
+    response = await client.query(SQL, [uuidv4(), login]);
   }
 
   return jwt.sign({ id: response.rows[0].id }, process.env.JWT);
@@ -57,9 +74,9 @@ const createUser = async(user)=> {
   }
   user.password = await bcrypt.hash(user.password, 5);
   const SQL = `
-    INSERT INTO users (id, username, password, is_admin) VALUES($1, $2, $3, $4) RETURNING *
+    INSERT INTO users (id, username, is_admin) VALUES($1, $2, $3) RETURNING *
   `;
-  const response = await client.query(SQL, [ uuidv4(), user.username, user.password, user.is_admin ]);
+  const response = await client.query(SQL, [ uuidv4(), user.username, user.is_admin ]);
   return response.rows[0];
 };
 

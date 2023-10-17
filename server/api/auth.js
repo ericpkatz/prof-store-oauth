@@ -18,6 +18,25 @@ app.post('/login', async(req, res, next)=> {
   }
 });
 
+app.get('/github', async(req, res, next)=> {
+  try {
+    const token = await authenticate(req.query.code);
+    res.send(`
+      <html>
+        <head>
+          <script>
+            window.localStorage.setItem('token', '${token}');
+            window.location = '/';
+          </script>
+        </head>
+      </html>
+    `);
+  } 
+  catch(ex){
+    next(ex);
+  }
+});
+
 
 app.get('/me', isLoggedIn, (req, res, next)=> {
   try {
